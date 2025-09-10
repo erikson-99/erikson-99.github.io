@@ -183,3 +183,99 @@ export const runChecks = async (
     };
   }
 };
+
+export type TaskInput = { id: string; markdown: string };
+
+export const runChecksBatch = async (
+  tasks: TaskInput[],
+  prompts: Prompts,
+  modelOverride?: string,
+  debug?: boolean,
+  entityLabel: string = 'Aufgaben'
+): Promise<Record<string, CheckResults>> => {
+  const proxyUrl = (import.meta as any).env?.VITE_PROXY_URL as string | undefined;
+  const baseUrl = ((import.meta as any).env?.VITE_OPENROUTER_BASE_URL as string) || 'https://openrouter.ai/api/v1';
+  const model = modelOverride || ((import.meta as any).env?.VITE_OPENROUTER_MODEL as string) || 'google/gemini-2.5-flash';
+
+  const systemInstruction = `Du bist ein professioneller Korrektor und Fachprüfer für Ausbildungsinhalte. Du prüfst mehrere ${entityLabel} in einem Durchlauf. Für JEDES Element (Schlüssel) lieferst du jeweils drei Kategorien: fachlich, sprachlich, guidelines.\n\nGib AUSSCHLIESSLICH EIN EINZIGES JSON-OBJEKT zurück, dessen Schlüssel die IDs sind. Jede ID zeigt auf ein Objekt { fachlich: [], sprachlich: [], guidelines: [] } mit denselben Item-Feldern wie zuvor (original, suggestion, explanation, optional sources).\n\nBeispiel: {\n  "id-1": { "fachlich": [...], "sprachlich": [...], "guidelines": [...] },\n  "id-2": { ... }\n}`;
+
+  const userContentHeader = `Hier sind mehrere ${entityLabel}, jeweils als JSON-Objekt mit id und markdown. Prüfe jedes Element separat und gib das Ergebnis als JSON-Objekt zurück (KEY = id).`;
+  const payload = {
+    model,
+    temperature: 0.2,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: systemInstruction },
+      { role: 'user', content: userContentHeader },
+      { role: 'user', content: JSON.stringify(tasks) }
+    ]
+  } as const;
+
+  if (debug) {
+    try { (window as any).__lastOpenRouterBatchRequest = { url: `${baseUrl}/chat/completions`, model, payload }; } catch {}
+    console.info('[DEBUG] OpenRouter batch model', model);
+    console.info('[DEBUG] OpenRouter batch request', payload);
+  }
+
+  const targetUrl = proxyUrl || `${baseUrl}/chat/completions`;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (!proxyUrl) {
+    const clientKey = (import.meta as any).env?.VITE_OPENROUTER_API_KEY as string | undefined;
+    if (!clientKey) throw new Error('Kein Proxy konfiguriert und VITE_OPENROUTER_API_KEY fehlt. Für Production bitte einen Proxy nutzen.');
+    headers['Authorization'] = `Bearer ${clientKey}`;
+  }
+
+  const res = await fetch(targetUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+  if (!res.ok) {
+    const text = await res.text();
+    if (debug) {
+      try { (window as any).__lastOpenRouterBatchResponse = text; } catch {}
+      console.info('[DEBUG] OpenRouter batch HTTP error', res.status, text);
+    }
+    throw new Error(`OpenRouter HTTP ${res.status}: ${text}`);
+  }
+
+  const data = await res.json();
+  if (debug) {
+    try { (window as any).__lastOpenRouterBatchResponse = data; } catch {}
+    console.info('[DEBUG] OpenRouter batch response (raw)', data);
+  }
+  const content: string | undefined = data?.choices?.[0]?.message?.content;
+  let parsed: any = {};
+  try { parsed = content ? JSON.parse(content) : {}; } catch {}
+
+  const map = (val: any): Record<string, CheckResults> => {
+    const out: Record<string, CheckResults> = {};
+    if (val && typeof val === 'object') {
+      for (const key of Object.keys(val)) {
+        const normalized = (val as any)[key];
+        const one = {
+          fachlich: Array.isArray(normalized?.fachlich) ? normalized.fachlich.map((x: any) => ({
+            original: String(x?.original ?? ''),
+            suggestion: String(x?.suggestion ?? ''),
+            explanation: String(x?.explanation ?? ''),
+            ...(Array.isArray(x?.sources) ? { sources: x.sources } : {})
+          })) : [],
+          sprachlich: Array.isArray(normalized?.sprachlich) ? normalized.sprachlich.map((x: any) => ({
+            original: String(x?.original ?? ''),
+            suggestion: String(x?.suggestion ?? ''),
+            explanation: String(x?.explanation ?? '')
+          })) : [],
+          guidelines: Array.isArray(normalized?.guidelines) ? normalized.guidelines.map((x: any) => ({
+            original: String(x?.original ?? ''),
+            suggestion: String(x?.suggestion ?? ''),
+            explanation: String(x?.explanation ?? '')
+          })) : []
+        } as CheckResults;
+        out[key] = one;
+      }
+    }
+    return out;
+  };
+
+  const normalized = map(parsed);
+  if (debug) {
+    console.info('[DEBUG] Batch normalized results', normalized);
+  }
+  return normalized;
+};

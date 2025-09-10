@@ -300,24 +300,48 @@ export const ExplanationEditor: React.FC = () => {
         setIsPanelOpen(false);
         setCheckResults({});
 
-        const allResults: Record<string, CheckResults> = {};
-        for (const section of sections) {
-            const result = await runChecks(section.markdown, prompts, model, debug);
-            allResults[section.id] = result;
-            setCheckResults(prev => ({...prev, [section.id]: result}));
-        }
-        setIsChecking(false);
+        try {
+            const batch = sections.map(s => ({ id: s.id, markdown: s.markdown }));
+            const { runChecksBatch } = await import('../services/openrouterService');
+            const resultsMap = await runChecksBatch(batch, prompts, model, debug, 'Abschnitte');
+            const allResults: Record<string, CheckResults> = {};
+            for (const s of batch) {
+                const r = resultsMap[s.id] || { fachlich: [], sprachlich: [], guidelines: [] };
+                allResults[s.id] = r;
+                setCheckResults(prev => ({ ...prev, [s.id]: r }));
+            }
 
-        const firstSectionWithErrors = sections.find(s => {
-            const res = allResults[s.id];
-            return res && (res.fachlich.length > 0 || res.sprachlich.length > 0 || res.guidelines.length > 0);
-        });
+            const firstSectionWithErrors = sections.find(sec => {
+                const res = allResults[sec.id];
+                return res && (res.fachlich.length > 0 || res.sprachlich.length > 0 || res.guidelines.length > 0);
+            });
 
-        if(firstSectionWithErrors) {
-            setSelectedSectionId(firstSectionWithErrors.id);
-            setIsPanelOpen(true);
-        } else {
-            alert('Keine Fehler in allen Abschnitten gefunden!');
+            if (firstSectionWithErrors) {
+                setSelectedSectionId(firstSectionWithErrors.id);
+                setIsPanelOpen(true);
+            } else {
+                alert('Keine Fehler in allen Abschnitten gefunden!');
+            }
+        } catch (e) {
+            console.error('Batch-Prüfung (TE) fehlgeschlagen, fallback auf Einzelprüfung:', e);
+            const allResults: Record<string, CheckResults> = {};
+            for (const section of sections) {
+                const result = await runChecks(section.markdown, prompts, model, debug);
+                allResults[section.id] = result;
+                setCheckResults(prev => ({...prev, [section.id]: result}));
+            }
+            const firstSectionWithErrors = sections.find(s => {
+                const res = allResults[s.id];
+                return res && (res.fachlich.length > 0 || res.sprachlich.length > 0 || res.guidelines.length > 0);
+            });
+            if(firstSectionWithErrors) {
+                setSelectedSectionId(firstSectionWithErrors.id);
+                setIsPanelOpen(true);
+            } else {
+                alert('Keine Fehler in allen Abschnitten gefunden!');
+            }
+        } finally {
+            setIsChecking(false);
         }
     }, [sections, prompts, model, debug]);
 

@@ -7,7 +7,7 @@ import { runChecks } from '../services/openrouterService';
 import { CheckResultsPanel } from './CheckResultsPanel';
 import { usePrompts } from '../contexts/PromptsContext';
 import { useModel } from '../contexts/ModelContext';
-import { useUndoableState } from '../services/utils/textRanges';
+import { useUndoableState, findRange, replaceRange } from '../services/utils/textRanges';
 import { useDebug } from '../contexts/DebugContext';
 import { sendChat } from '../services/openrouterChat';
 import { NewTaskModal } from './NewTaskModal';
@@ -184,37 +184,69 @@ export const QuizEditor: React.FC = () => {
     setIsResultsPanelOpen(false);
     setCheckResults({});
 
-    const allResults: Record<string, CheckResults> = {};
+    try {
+      const batch = tasks
+        .map(t => ({ id: t.id, markdown: getMarkdownForTask(t.id) }))
+        .filter(x => !!x.markdown) as { id: string; markdown: string }[];
 
-    for (const task of tasks) {
-        const taskMarkdown = getMarkdownForTask(task.id);
-        if (taskMarkdown) {
-            const result = await runChecks(taskMarkdown, prompts, model, debug);
-            allResults[task.id] = result;
-            setCheckResults(prev => ({ ...prev, [task.id]: result }));
-        }
-    }
+      // Prefer batch call to reduce prompt repetition and cost
+      const { runChecksBatch } = await import('../services/openrouterService');
+      const resultsMap = await runChecksBatch(batch, prompts, model, debug, 'Aufgaben');
+      const allResults: Record<string, CheckResults> = {};
+      for (const t of batch) {
+        const r = resultsMap[t.id] || { fachlich: [], sprachlich: [], guidelines: [] };
+        allResults[t.id] = r;
+        setCheckResults(prev => ({ ...prev, [t.id]: r }));
+      }
 
-    setIsChecking(false);
-    
-    const firstTaskWithErrorsId = tasks.find(task => {
+      const firstTaskWithErrorsId = tasks.find(task => {
         const res = allResults[task.id];
         return res && (res.fachlich.length > 0 || res.sprachlich.length > 0 || res.guidelines.length > 0);
-    })?.id;
+      })?.id;
 
-    if (firstTaskWithErrorsId) {
+      if (firstTaskWithErrorsId) {
         setSelectedTaskId(firstTaskWithErrorsId);
         setIsResultsPanelOpen(true);
-    } else {
+      } else {
         alert('Keine Fehler in allen Aufgaben gefunden!');
+      }
+    } catch (e) {
+      console.error('Batch-Prüfung fehlgeschlagen, falle zurück auf Einzelprüfung:', e);
+      // Fallback: sequential as before
+      const allResults: Record<string, CheckResults> = {};
+      for (const task of tasks) {
+        const taskMarkdown = getMarkdownForTask(task.id);
+        if (taskMarkdown) {
+          const { runChecks } = await import('../services/openrouterService');
+          const result = await runChecks(taskMarkdown, prompts, model, debug);
+          allResults[task.id] = result;
+          setCheckResults(prev => ({ ...prev, [task.id]: result }));
+        }
+      }
+      const firstTaskWithErrorsId = tasks.find(task => {
+        const res = allResults[task.id];
+        return res && (res.fachlich.length > 0 || res.sprachlich.length > 0 || res.guidelines.length > 0);
+      })?.id;
+      if (firstTaskWithErrorsId) {
+        setSelectedTaskId(firstTaskWithErrorsId);
+        setIsResultsPanelOpen(true);
+      } else {
+        alert('Keine Fehler in allen Aufgaben gefunden!');
+      }
+    } finally {
+      setIsChecking(false);
     }
   }, [tasks, getMarkdownForTask, prompts, model, debug]);
 
 
   const handleApplyFix = useCallback((errorToFix: ActionableError) => {
     if (!selectedTaskMarkdown || !selectedTaskId) return;
-  
-    const updatedMarkdown = selectedTaskMarkdown.replace(errorToFix.original, errorToFix.suggestion);
+
+    // Robust replace: fuzzy match original ignoring markdown formatting/spacing
+    const r = findRange(selectedTaskMarkdown, errorToFix.original);
+    const updatedMarkdown = r
+      ? replaceRange(selectedTaskMarkdown, r, errorToFix.suggestion)
+      : selectedTaskMarkdown.replace(errorToFix.original, errorToFix.suggestion);
     handleTaskMarkdownChange(updatedMarkdown);
 
     setCheckResults(prevResults => {

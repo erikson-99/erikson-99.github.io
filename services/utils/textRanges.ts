@@ -32,23 +32,82 @@ function normalizeWithIndexMap(src: string) {
   return { norm, map };
 }
 
+/** Aggressive Normalisierung für fuzzy Matching:
+    - Kleinbuchstaben
+    - typografische Anführungszeichen vereinheitlichen
+    - Gedankenstriche vereinheitlichen
+    - Markdown-Formatierungszeichen entfernen (** * _ ` ~)
+    - Mehrfach-Leerzeichen zu einem Leerzeichen
+ */
+function normalizeForMatchWithIndexMap(src: string) {
+  const map: number[] = [];
+  let norm = '';
+  let prevWasSpace = false;
+
+  const toSimple = (ch: string) => {
+    // Normalize quotes and dashes
+    if ('“”„”«»‟'.includes(ch)) return '"';
+    if ("’‘‚`´ʼʹ＇".includes(ch)) return "'";
+    if ('–—−‑‒﹘'.includes(ch)) return '-';
+    return ch.toLowerCase();
+  };
+
+  // letters/digits incl. German umlauts and ß
+  const isWordChar = (ch: string) => /[a-z0-9äöüß]/i.test(ch);
+
+  for (let i = 0; i < src.length; i++) {
+    let ch = toSimple(src[i]);
+    // Treat non-word chars as space (removes punctuation, markdown markers, etc.)
+    if (!isWordChar(ch)) ch = ' ';
+    if (isSpace(ch)) {
+      if (!prevWasSpace) {
+        norm += ' ';
+        map.push(i);
+        prevWasSpace = true;
+      }
+    } else {
+      norm += ch;
+      map.push(i);
+      prevWasSpace = false;
+    }
+  }
+  return { norm, map };
+}
+
 /** Sucht eine Nadel im Heuhaufen,
     zuerst exakt, dann tolerant gegenüber Leerzeichen und Zeilenumbrüchen */
 export function findRange(haystack: string, needle: string): TextRange | null {
+  const sanitize = (s: string) => {
+    let out = s.trim();
+    // Remove trailing ellipsis variants and trailing punctuation/quotes/brackets
+    out = out.replace(/\s*(?:…|\.\.\.)\s*$/u, '');
+    out = out.replace(/[\s\)\]\}"'»]+$/u, '');
+    return out;
+  };
+  const needleClean = sanitize(needle);
   // exakter Treffer
-  const i = haystack.indexOf(needle);
+  const i = haystack.indexOf(needleClean);
   if (i >= 0) return { start: i, end: i + needle.length };
 
   // toleranter Treffer
   const { norm: H, map } = normalizeWithIndexMap(haystack);
-  const { norm: N } = normalizeWithIndexMap(needle);
+  const { norm: N } = normalizeWithIndexMap(needleClean);
 
   const k = H.indexOf(N);
   if (k < 0) return null;
 
   const start = map[k];
   const end = map[Math.min(k + N.length - 1, map.length - 1)] + 1;
-  return { start, end };
+  if (start !== undefined && end !== undefined) return { start, end };
+
+  // aggressive fuzzy pass
+  const A = normalizeForMatchWithIndexMap(haystack);
+  const B = normalizeForMatchWithIndexMap(needleClean);
+  const k2 = A.norm.indexOf(B.norm);
+  if (k2 < 0) return null;
+  const start2 = A.map[k2];
+  const end2 = A.map[Math.min(k2 + B.norm.length - 1, A.map.length - 1)] + 1;
+  return { start: start2, end: end2 };
 }
 
 export function replaceRange(src: string, r: TextRange, replacement: string) {
