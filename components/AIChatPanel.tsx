@@ -50,6 +50,14 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
     viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight });
   }, [messages, isSending]);
 
+  // ESC zum Schließen
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   const lastAssistant = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'assistant') return messages[i].content;
@@ -81,14 +89,18 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
   if (!isOpen && docked) return null;
 
   return (
-    <aside className={`${docked ? 'h-full w-full md:w-[520px] flex-shrink-0' : 'fixed right-0 top-0 h-full z-50'} bg-gray-900 border-l border-gray-700 shadow-2xl transition-all duration-300 ${docked ? '' : (isOpen ? 'w-full md:w-[520px]' : 'w-0 overflow-hidden')}`}>
+    <>
+      {!docked && isOpen && (
+        <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} aria-hidden="true"></div>
+      )}
+      <aside className={`${docked ? 'h-full w-full md:w-[640px] flex-shrink-0' : 'fixed right-0 top-0 h-full z-50'} bg-gray-900 border-l border-gray-700 shadow-2xl transition-all duration-300 ${docked ? '' : (isOpen ? 'w-full md:w-[640px]' : 'w-0 overflow-hidden')}`}>
       <div className="flex flex-col h-full">
         <header className="flex items-center justify-between p-3 border-b border-gray-700">
           <div className="flex flex-col">
             <h3 className="text-lg font-bold text-white">AI-Edit</h3>
             <span className="text-xs text-gray-400 truncate max-w-[420px]" title={contextLabel}>{contextLabel}</span>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {supportsPrompts && (
               <>
                 <label htmlFor="chat-prompt" className="text-xs text-gray-400">Prompt</label>
@@ -128,10 +140,11 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 rounded hover:bg-gray-700"
+              className="px-3 py-1 bg-gray-700 text-white rounded-md text-sm hover:bg-gray-600"
               aria-label="AI-Edit schließen"
+              title="Schließen (Esc)"
             >
-              ✕
+              Schließen
             </button>
           </div>
         </header>
@@ -162,5 +175,6 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
         </div>
       </div>
     </aside>
+    </>
   );
 };
