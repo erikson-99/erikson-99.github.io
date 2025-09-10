@@ -7,7 +7,7 @@ import { CheckResultsPanel } from './CheckResultsPanel';
 import { usePrompts } from '../contexts/PromptsContext';
 import { useModel } from '../contexts/ModelContext';
 import { Sidebar } from './Sidebar';
-import { useUndoableState } from '../services/utils/textRanges';
+import { useUndoableState, findRange, replaceRange } from '../services/utils/textRanges';
 import { useDebug } from '../contexts/DebugContext';
 
 const INITIAL_MARKDOWN = `## **Aufgabensatz: Grundlagen & Sicherheit (4 Aufgaben)**
@@ -247,14 +247,22 @@ export const MixedQuizEditor: React.FC = () => {
 
   const handleApplyFix = useCallback((errorToFix: ActionableError) => {
     if (!selectedTaskMarkdown || !selectedTaskId) return;
-  
-    const updatedMarkdown = selectedTaskMarkdown.replace(errorToFix.original, errorToFix.suggestion);
+
+    const r = findRange(selectedTaskMarkdown, errorToFix.original);
+    if (!r) {
+      alert('Originaltext konnte im Aufgaben-Markdown nicht eindeutig gefunden werden. Bitte manuell prüfen/übernehmen.');
+      return; // Fehler verbleibt
+    }
+    const updatedMarkdown = replaceRange(selectedTaskMarkdown, r, errorToFix.suggestion);
     handleTaskMarkdownChange(updatedMarkdown);
 
     setCheckResults(prevResults => {
         if (!prevResults || !selectedTaskId || !prevResults[selectedTaskId]) return prevResults;
         const currentTaskResults = prevResults[selectedTaskId]!;
-        const isSameError = (e: ActionableError) => e.original === errorToFix.original && e.suggestion === errorToFix.suggestion;
+        const isSameError = (e: ActionableError) => 
+            e.original === errorToFix.original && 
+            e.suggestion === errorToFix.suggestion && 
+            e.explanation === errorToFix.explanation;
 
         return {
             ...prevResults,

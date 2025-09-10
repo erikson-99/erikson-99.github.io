@@ -244,9 +244,11 @@ export const QuizEditor: React.FC = () => {
 
     // Robust replace: fuzzy match original ignoring markdown formatting/spacing
     const r = findRange(selectedTaskMarkdown, errorToFix.original);
-    const updatedMarkdown = r
-      ? replaceRange(selectedTaskMarkdown, r, errorToFix.suggestion)
-      : selectedTaskMarkdown.replace(errorToFix.original, errorToFix.suggestion);
+    if (!r) {
+      alert('Originaltext konnte im Aufgaben-Markdown nicht eindeutig gefunden werden. Bitte manuell prüfen/übernehmen.');
+      return; // Fehler bleibt in der Liste
+    }
+    const updatedMarkdown = replaceRange(selectedTaskMarkdown, r, errorToFix.suggestion);
     handleTaskMarkdownChange(updatedMarkdown);
 
     setCheckResults(prevResults => {
