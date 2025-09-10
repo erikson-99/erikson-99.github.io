@@ -1,0 +1,7 @@
+{
+  "name": "Fancy Markdown Editor",
+  "description": "An application to view, edit, and interact with quizzes written in a specific Markdown format. It provides a side-by-side view of the raw Markdown and a rendered frontend preview with answers highlighted.",
+  "requestFramePermissions": [
+    "clipboard-read"
+  ]
+}
