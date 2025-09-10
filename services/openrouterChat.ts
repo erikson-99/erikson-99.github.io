@@ -21,8 +21,7 @@ export const sendChat = async (
 
   const targetUrl = proxyUrl || `${baseUrl}/chat/completions`;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-Title': 'AI Edit Chat'
+    'Content-Type': 'application/json'
   };
   if (!proxyUrl) {
     const clientKey = (import.meta as any).env?.VITE_OPENROUTER_API_KEY as string | undefined;
