@@ -18,6 +18,21 @@ export interface TaskSet {
   tasks: Task[];
 }
 
+export interface LessonSlide {
+  id: string;
+  label: string;
+  title: string;
+  displayTitle: string;
+  markdown: string;
+  start: number;
+  end: number;
+}
+
+export interface LessonDocument {
+  title: string;
+  slides: LessonSlide[];
+}
+
 export interface ActionableError {
   original: string;
   suggestion: string;

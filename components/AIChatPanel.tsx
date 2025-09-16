@@ -25,6 +25,9 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
   const viewportRef = useRef<HTMLDivElement>(null);
   const [selectedPrompt, setSelectedPrompt] = useState<'none' | 'review' | 'single'>('none');
   const [includeTE, setIncludeTE] = useState<boolean>(true);
+  const [includeCTX, setIncludeCTX] = useState<boolean>(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -39,11 +42,15 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
       const te = localStorage.getItem('explanationMarkdown') || '';
       if (te.trim()) prelude.push({ role: 'user', content: `Kontext (TE):\n${te}` });
     }
+    if (supportsPrompts && includeCTX) {
+      const ctx = localStorage.getItem('contextMarkdown') || '';
+      if (ctx.trim()) prelude.push({ role: 'user', content: `Zusätzlicher Kontext:\n${ctx}` });
+    }
     prelude.push({ role: 'user', content: `Kontext (${contextLabel}):\n\n${contextMarkdown}` });
     setMessages(prelude);
     setInput('');
     setChatModel(model);
-  }, [isOpen, contextLabel, contextMarkdown, model, supportsPrompts, selectedPrompt, includeTE, prompts]);
+  }, [isOpen, contextLabel, contextMarkdown, model, supportsPrompts, selectedPrompt, includeTE, includeCTX, prompts]);
 
   useEffect(() => {
     // autoscroll
@@ -86,6 +93,54 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
     if (onReplace && lastAssistant.trim()) onReplace(lastAssistant);
   }, [onReplace, lastAssistant]);
 
+  const openFilePicker = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  }, []);
+
+  // Lightweight PDF text extraction via CDN
+  const extractPdfText = useCallback(async (file: File): Promise<string> => {
+    try {
+      const buf = await file.arrayBuffer();
+      // @ts-ignore
+      const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.mjs');
+      const doc = await pdfjs.getDocument({ data: buf }).promise;
+      let out = '';
+      for (let i = 1; i <= Math.min(doc.numPages, 50); i++) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        const text = (content.items || []).map((it: any) => it.str || '').join(' ');
+        out += `\n\n---\n# Seite ${i}\n\n` + text;
+        if (out.length > 200_000) break; // cap ~200k chars
+      }
+      return out.trim();
+    } catch {
+      return '';
+    }
+  }, []);
+
+  const handleFiles = useCallback(async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    const added: { name: string; text: string }[] = [];
+    for (const f of Array.from(files)) {
+      const isPdf = (f.type || '').includes('application/pdf') || /\.pdf$/i.test(f.name);
+      const text = isPdf ? await extractPdfText(f) : (await f.text()).trim();
+      if (!text) continue;
+      const limited = text.slice(0, 200_000); // safety cap
+      added.push({ name: f.name, text: limited });
+    }
+    if (added.length) {
+      setAttachments(prev => [...prev, ...added]);
+      // Push as separate user messages so sie fließen in die nächste Anfrage ein
+      setMessages(prev => [
+        ...prev,
+        ...added.map(a => ({ role: 'user', content: `Anhang: ${a.name}\n\n${a.text}` as string }))
+      ]);
+    }
+  }, [extractPdfText]);
+
   if (!isOpen && docked) return null;
 
   return (
@@ -116,6 +171,8 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
                 </select>
                 <label htmlFor="te-toggle" className="text-xs text-gray-400 ml-2">TE</label>
                 <input id="te-toggle" type="checkbox" className="accent-sky-500" checked={includeTE} onChange={(e) => setIncludeTE(e.target.checked)} />
+                <label htmlFor="ctx-toggle" className="text-xs text-gray-400 ml-2">CTX</label>
+                <input id="ctx-toggle" type="checkbox" className="accent-sky-500" checked={includeCTX} onChange={(e) => setIncludeCTX(e.target.checked)} />
               </>
             )}
             <label htmlFor="chat-model" className="text-xs text-gray-400">Modell</label>
@@ -138,6 +195,14 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
             >
               Übernehmen
             </button>
+            <button
+              onClick={openFilePicker}
+              className="px-3 py-1 bg-gray-700 text-white rounded-md text-sm hover:bg-gray-600"
+              title="Datei als Kontext an die KI anhängen (Text/PDF)"
+            >
+              Anhang
+            </button>
+            <input ref={fileInputRef} type="file" multiple accept=".md,.markdown,.txt,.json,.pdf,text/plain,text/markdown,application/json,application/pdf" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
             <button
               onClick={onClose}
               className="px-3 py-1 bg-gray-700 text-white rounded-md text-sm hover:bg-gray-600"
@@ -172,6 +237,11 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
               Senden
             </button>
           </div>
+          {attachments.length > 0 && (
+            <div className="mt-2 text-xs text-gray-400">
+              Anhänge: {attachments.map(a => a.name).join(', ')}
+            </div>
+          )}
         </div>
       </div>
     </aside>

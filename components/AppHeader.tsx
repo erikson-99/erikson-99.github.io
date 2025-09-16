@@ -34,6 +34,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ currentMode, onModeChange 
                     Gemischte Aufgaben
                 </button>
                 <button
+                    onClick={() => onModeChange('lesson')}
+                    className={`${buttonStyle} ${currentMode === 'lesson' ? activeStyle : inactiveStyle}`}
+                     aria-pressed={currentMode === 'lesson'}
+                >
+                    Lektionen
+                </button>
+                <button
                     onClick={() => onModeChange('explanation')}
                     className={`${buttonStyle} ${currentMode === 'explanation' ? activeStyle : inactiveStyle}`}
                      aria-pressed={currentMode === 'explanation'}
@@ -46,6 +53,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ currentMode, onModeChange 
                      aria-pressed={currentMode === 'prompts'}
                 >
                     Prompts
+                </button>
+                <button
+                    onClick={() => onModeChange('context')}
+                    className={`${buttonStyle} ${currentMode === 'context' ? activeStyle : inactiveStyle}`}
+                     aria-pressed={currentMode === 'context'}
+                >
+                    Kontext
                 </button>
             </div>
             <div className="flex items-center space-x-4">

@@ -7,8 +7,10 @@ import { ModelProvider } from './contexts/ModelContext';
 import { DebugProvider } from './contexts/DebugContext';
 import { PromptsEditor } from './components/PromptsEditor';
 import { MixedQuizEditor } from './components/MixedQuizEditor';
+import { LessonEditor } from './components/LessonEditor';
+import ContextManager from './components/ContextManager';
 
-export type EditorMode = 'quiz' | 'explanation' | 'prompts' | 'mixed-quiz';
+export type EditorMode = 'quiz' | 'explanation' | 'prompts' | 'mixed-quiz' | 'lesson' | 'context';
 
 export default function App() {
   const [mode, setMode] = useState<EditorMode>(() => {
@@ -29,6 +31,10 @@ export default function App() {
         return <PromptsEditor />;
       case 'mixed-quiz':
         return <MixedQuizEditor />;
+      case 'lesson':
+        return <LessonEditor />;
+      case 'context':
+        return <ContextManager />;
       default:
         return <QuizEditor />;
     }
