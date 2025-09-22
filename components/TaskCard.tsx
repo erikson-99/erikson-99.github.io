@@ -20,24 +20,12 @@ const XIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 
 export const TaskCard: React.FC<TaskCardProps> = ({ task }) => {
-  const isSingleChoice = task.options.filter(o => o.isCorrect).length <= 1;
-
   const getOptionStyles = (isCorrect: boolean) => {
-    if (isSingleChoice) {
-      return {
-        containerClasses: isCorrect 
-          ? 'bg-green-600 border-green-500 text-white' 
-          : 'bg-red-600 border-red-500 text-white',
-        iconClassName: 'text-white'
-      };
-    }
-    
-    // Multi-choice styles remain the same
     return {
-      containerClasses: isCorrect 
-        ? 'bg-green-500/10 border-green-500/30 text-green-300' 
+      containerClasses: isCorrect
+        ? 'bg-green-500/10 border-green-500/30 text-green-300'
         : 'bg-red-500/10 border-red-500/30 text-red-300',
-      iconClassName: undefined // Use default icon color
+      iconClassName: isCorrect ? 'text-green-400' : 'text-red-400',
     };
   };
 

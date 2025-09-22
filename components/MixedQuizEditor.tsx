@@ -9,6 +9,7 @@ import { useModel } from '../contexts/ModelContext';
 import { Sidebar } from './Sidebar';
 import { useUndoableState, findRange, replaceRange } from '../services/utils/textRanges';
 import { useDebug } from '../contexts/DebugContext';
+import { AIChatPanel } from './AIChatPanel';
 
 const INITIAL_MARKDOWN = `## **Aufgabensatz: Grundlagen & Sicherheit (4 Aufgaben)**
 
@@ -142,6 +143,7 @@ export const MixedQuizEditor: React.FC = () => {
   const [isChecking, setIsChecking] = useState<boolean>(false);
   const [checkResults, setCheckResults] = useState<Record<string, CheckResults | null> | null>(null);
   const [isResultsPanelOpen, setIsResultsPanelOpen] = useState<boolean>(false);
+  const [isAIEditOpen, setIsAIEditOpen] = useState<boolean>(false);
   const { prompts } = usePrompts();
   const { model } = useModel();
   const { debug } = useDebug();
@@ -317,6 +319,7 @@ export const MixedQuizEditor: React.FC = () => {
           onTaskMarkdownChange={handleTaskMarkdownChange}
           onCheckTask={handleCheckTask}
           isChecking={isChecking && !!(checkResults && selectedTaskId && checkResults[selectedTaskId] === null)}
+          onOpenAIEdit={() => setIsAIEditOpen(true)}
           onUndo={undo}
           onRedo={redo}
           canUndo={canUndo}
@@ -327,6 +330,15 @@ export const MixedQuizEditor: React.FC = () => {
             onClose={() => setIsResultsPanelOpen(false)}
             results={selectedTaskId ? checkResults?.[selectedTaskId] ?? null : null}
             onApplyFix={handleApplyFix}
+        />
+        <AIChatPanel
+          isOpen={isAIEditOpen}
+          docked
+          supportsPrompts
+          onClose={() => setIsAIEditOpen(false)}
+          contextLabel={selectedTask ? selectedTask.title : 'Aufgabe'}
+          contextMarkdown={selectedTaskMarkdown}
+          onReplace={handleTaskMarkdownChange}
         />
       </main>
     </div>

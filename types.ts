@@ -33,6 +33,14 @@ export interface LessonDocument {
   slides: LessonSlide[];
 }
 
+export interface PromptDefinition {
+  id: string;
+  title: string;
+  content: string;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
 export interface ActionableError {
   original: string;
   suggestion: string;
@@ -55,4 +63,6 @@ export interface ExplanationSection {
 export interface Prompts {
   combined: string;
   singleChoice: string;
+  multiSingleChoice: string;
+  custom: PromptDefinition[];
 }

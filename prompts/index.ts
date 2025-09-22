@@ -1,0 +1,12 @@
+export { default as singleChoicePrompt } from './single-choice.md?raw';
+export { default as multiSingleChoicePrompt } from './single-choice-batch.md?raw';
+export { default as multipleChoicePrompt } from './multiple-choice.md?raw';
+export { default as wahrFalschPrompt } from './wahr-falsch.md?raw';
+export { default as textInputPrompt } from './text-input.md?raw';
+export { default as freitextPrompt } from './freitext.md?raw';
+export { default as lueckensatzSelectablePrompt } from './lueckensatz-selectable.md?raw';
+export { default as lueckensatzTextInputPrompt } from './lueckensatz-text-input.md?raw';
+export { default as lueckentextPrompt } from './lueckentext.md?raw';
+export { default as mathinputPrompt } from './mathinput.md?raw';
+export { default as reihenfolgePrompt } from './reihenfolge.md?raw';
+export { default as zuordnungPrompt } from './zuordnung.md?raw';

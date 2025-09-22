@@ -3,14 +3,19 @@ import React, { useEffect, useState } from 'react';
 interface NewTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onGenerate: (instruction: string | null) => void;
+  onGenerate: (count: number, instruction: string | null) => void;
+  onCreateEmpty: () => void;
 }
 
-export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onGenerate }) => {
+export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onGenerate, onCreateEmpty }) => {
   const [text, setText] = useState('');
+  const [count, setCount] = useState<number>(1);
 
   useEffect(() => {
-    if (isOpen) setText('');
+    if (isOpen) {
+      setText('');
+      setCount(1);
+    }
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -27,22 +32,43 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({ isOpen, onClose, onG
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <div className="mt-4 flex justify-end space-x-2">
+        <div className="mt-3 flex items-center justify-between">
+          <label htmlFor="task-count" className="text-sm text-gray-300 font-medium">
+            Anzahl Aufgaben
+          </label>
+          <input
+            id="task-count"
+            type="number"
+            min={1}
+            max={10}
+            value={count}
+            onChange={(e) => setCount(Math.max(1, Number(e.target.value) || 1))}
+            className="w-24 bg-gray-800 border border-gray-700 rounded-md p-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500 text-right"
+          />
+        </div>
+        <div className="mt-4 flex items-center justify-between">
           <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600"
+            onClick={onCreateEmpty}
+            className="px-4 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-500"
           >
-            Abbrechen
+            Leere Aufgabe
           </button>
-          <button
-            onClick={() => onGenerate(text.trim() ? text.trim() : null)}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-500"
-          >
-            Generieren
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600"
+            >
+              Abbrechen
+            </button>
+            <button
+              onClick={() => onGenerate(count, text.trim() ? text.trim() : null)}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-500"
+            >
+              Generieren
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-

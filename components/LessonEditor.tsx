@@ -503,9 +503,12 @@ export const LessonEditor: React.FC = () => {
   const handleSlideMarkdownChange = useCallback((newMarkdownForSlide: string) => {
     if (!selectedSlide) return;
     setRawMarkdown(prev => {
-      const before = prev.slice(0, selectedSlide.start);
-      const after = prev.slice(selectedSlide.end);
-      return before + newMarkdownForSlide + after;
+      const range = findRange(prev, selectedSlide.markdown);
+      if (!range) {
+        console.warn('Konnte Folien-Markdown nicht lokalisieren, überspringe Update.');
+        return prev;
+      }
+      return replaceRange(prev, range, newMarkdownForSlide);
     });
   }, [selectedSlide, setRawMarkdown]);
 

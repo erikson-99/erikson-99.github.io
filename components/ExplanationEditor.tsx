@@ -40,6 +40,18 @@ Der entscheidende Unterschied liegt in der **Arbeitstemperatur** und der resulti
 
 // --- Local Components for the new structure ---
 
+const countWords = (input: string): number => {
+  if (!input) return 0;
+
+  // remove segments like <animation>...</animation> regardless of tag name
+  const withoutCueBlocks = input.replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, ' ');
+  // remove remaining single tags like <image .../>
+  const withoutSingleTags = withoutCueBlocks.replace(/<[^>]+>/g, ' ');
+  const normalized = withoutSingleTags.trim().replace(/\s+/g, ' ');
+  if (!normalized) return 0;
+  return normalized.split(' ').length;
+};
+
 const StatusIndicator: React.FC<{ results: CheckResults | null | undefined }> = ({ results }) => {
     if (results === undefined) return null; 
     if (results === null) return null; 
@@ -142,6 +154,7 @@ interface ExplanationViewerProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  totalWordCount: number;
 }
 
 const ExplanationViewer: React.FC<ExplanationViewerProps> = ({
@@ -158,7 +171,10 @@ const ExplanationViewer: React.FC<ExplanationViewerProps> = ({
   onRedo,
   canUndo,
   canRedo,
+  totalWordCount,
 }) => {
+  const wordCount = useMemo(() => countWords(sectionMarkdown), [sectionMarkdown]);
+
   return (
     <div className="flex-1 flex flex-col bg-gray-800">
       <header className="flex items-center justify-between p-4 bg-gray-900 border-b border-gray-700 shadow-md z-10">
@@ -194,6 +210,12 @@ const ExplanationViewer: React.FC<ExplanationViewerProps> = ({
                 onChange={(isChecked) => setViewMode(isChecked ? 'preview' : 'markdown')}
             />
             <span className="text-gray-400">Vorschau</span>
+            <span className="px-3 py-1 border border-gray-700 rounded-md text-sm text-gray-300">
+              Wörter: {wordCount}
+            </span>
+            <span className="px-3 py-1 border border-gray-700 rounded-md text-sm text-gray-300">
+              Gesamt: {totalWordCount} Wörter
+            </span>
         </div>
       </header>
       <div className="flex-1 overflow-auto">
@@ -257,6 +279,7 @@ export const ExplanationEditor: React.FC = () => {
 
     const selectedSection = useMemo(() => sections.find(s => s.id === selectedSectionId) || null, [sections, selectedSectionId]);
     const selectedSectionMarkdown = selectedSection?.markdown ?? '';
+    const totalWordCount = useMemo(() => sections.reduce((sum, section) => sum + countWords(section.markdown), 0), [sections]);
 
     const handleSectionMarkdownChange = useCallback((newMarkdownForSection: string) => {
         if (!selectedSectionId) return;
@@ -438,6 +461,7 @@ export const ExplanationEditor: React.FC = () => {
                     onRedo={redo}
                     canUndo={canUndo}
                     canRedo={canRedo}
+                    totalWordCount={totalWordCount}
                 />
                 <CheckResultsPanel
                     isOpen={isPanelOpen}

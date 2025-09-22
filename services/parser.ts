@@ -4,13 +4,19 @@ export const parseMarkdownToTasks = (markdown: string): Task[] => {
     if (!markdown.trim()) return [];
 
     const tasks: Task[] = [];
-    const taskBlocks = markdown.split(/\n## /).slice(1);
-    
-    taskBlocks.forEach((block, index) => {
-        const lines = block.split('\n');
-        const title = lines[0].trim();
+    const headerRegex = /^##\s+Aufgabe[^\n]*/gm;
+    const headers = Array.from(markdown.matchAll(headerRegex));
+
+    headers.forEach((match, index) => {
+        const blockStart = match.index ?? 0;
+        const nextStart = index + 1 < headers.length ? headers[index + 1].index ?? markdown.length : markdown.length;
+        const rawBlock = markdown.slice(blockStart, nextStart).trim();
+
+        const lines = rawBlock.split('\n');
+        const titleLine = lines[0] ?? '';
+        const title = titleLine.replace(/^##\s+/, '').trim();
         const uniqueId = `aufgabe-${title.match(/\d+/)?.[0] || index}-${index}`;
-        
+
         const content = lines.slice(1).join('\n');
 
         const explanationMatch = content.match(/(?:\*\*Erklärung:\*\*|### Erklärung)\s*([\s\S]*)/);
@@ -183,22 +189,17 @@ export const parseMarkdownToLesson = (markdown: string): LessonDocument => {
     const lessonTitleMatch = source.match(/^#\s+(.+)$/m);
     const lessonTitle = lessonTitleMatch ? lessonTitleMatch[1].trim() : 'Lektion';
 
-    const slideRegex = /^##\s+Folie[^\n]*[\s\S]*?(?=^##\s+Folie|\Z)/gm;
+    const headerRegex = /^##\s+Folie[^\n]*/gm;
+    const headers = Array.from(source.matchAll(headerRegex));
     const slides: LessonSlide[] = [];
 
-    let match: RegExpExecArray | null;
-    let index = 0;
+    headers.forEach((match, index) => {
+        const rawHeader = match[0];
+        const blockStart = index === 0 ? 0 : match.index;
+        const nextStart = index + 1 < headers.length ? headers[index + 1].index : source.length;
+        const block = source.slice(blockStart, nextStart);
 
-    while ((match = slideRegex.exec(source)) !== null) {
-        const block = match[0];
-        const blockStart = match.index;
-        const blockEnd = slideRegex.lastIndex;
-
-        const start = index === 0 ? 0 : blockStart;
-        const end = blockEnd;
-        const markdownSlice = source.slice(start, end);
-
-        const labelLineMatch = block.match(/^##\s+(.+)$/m);
+        const labelLineMatch = rawHeader.match(/^##\s+(.+)$/m);
         const label = labelLineMatch ? labelLineMatch[1].trim() : `Folie ${index + 1}`;
 
         const titleLine = block
@@ -209,7 +210,7 @@ export const parseMarkdownToLesson = (markdown: string): LessonDocument => {
                 return /^#{1,6}\s+/.test(line) && !/^##\s+Folie/i.test(line);
             });
 
-        const cleanedTitle = titleLine 
+        const cleanedTitle = titleLine
             ? titleLine.replace(/^#{1,6}\s+/, '').trim()
             : label;
 
@@ -220,13 +221,11 @@ export const parseMarkdownToLesson = (markdown: string): LessonDocument => {
             label,
             title: cleanedTitle,
             displayTitle,
-            markdown: markdownSlice.trimStart(),
-            start,
-            end,
+            markdown: block.trimStart(),
+            start: blockStart,
+            end: nextStart,
         });
-
-        index += 1;
-    }
+    });
 
     if (slides.length === 0) {
         return {

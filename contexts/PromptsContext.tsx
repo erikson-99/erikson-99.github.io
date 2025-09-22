@@ -1,6 +1,11 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { Prompts } from '../types';
+import { Prompts, PromptDefinition } from '../types';
 import { useUndoableState } from '../services/utils/textRanges';
+import {
+  defaultSingleChoicePrompt,
+  defaultMultiSingleChoicePrompt,
+  builtinCustomPrompts,
+} from '../prompts/defaultPrompts';
 
 const DEFAULT_COMBINED_PROMPT = `
 Du prüfst Ausbildungsinhalte mit drei Perspektiven gleichzeitig: (1) Fachliche Richtigkeit, (2) Sprache (Rechtschreibung, Grammatik, Zeichensetzung), (3) simpleclub-Guidelines (Stil-Vorgaben).
@@ -51,74 +56,13 @@ Beispielausgabe (als reiner Text, kein Markdown-Codeblock):
 }
 `;
 
-const DEFAULT_SINGLE_CHOICE_PROMPT = `
-#### **1  Rolle**
-
-Du bist ein erfahrener Aufgabenersteller für Lernmaterialien, spezialisiert auf die Entwicklung präziser Single-Choice-Aufgaben, die das Verständnis eines gegebenen Erklärungstextes prüfen. Korrekte Punkt- und Fragezeichen­setzung hat höchste Priorität.
-
-#### **3  Anforderungen an die Aufgabe**
-
-| Bestandteil   | Vorgabe                                                                                                                                                           |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Kontext**   | Falls vorhanden: Wird mit Divider (---) von der Frage getrennt                                                                                                   |
-| **Frage**     | Vollständiger deutscher Satz mit Fragezeichen. **Schlagwörter fett (\*\*)**. Nach dem Fragezeichen folgt immer *Wähle aus.*                                   |
-| **Antworten** | Fünf Optionen (A–E). Eine korrekt, vier plausible Distraktoren. Ganze Sätze → Punkt; Stichpunkte → *kein* Punkt. Keine Fett- oder Kursiv­schrift in den Optionen. |
-| **Erklärung** | ≤ 60 Wörter. Ganze Sätze mit Punkt **oder** Stichpunkte ohne Punkt. Schlagwörter fett. Beispiele, falls nötig.                                                    |
-
----
-
-#### **4 Formatierung (First Output)**
-
-**Mit Kontext:**
-Kontext: ...
----
-   Frage: ...?
-   *Wähle aus.*
-   A. ...
-   B. ...
-   C. ...
-   D. ...
-   E. ...
-   Richtige Antwort: B
-   **Erklärung:** ...
-
-**Ohne Kontext:**
-   Frage: ...?
-   *Wähle aus.*
-   A. ...
-   B. ...
-   C. ...
-   D. ...
-   E. ...
-   Richtige Antwort: B
-   **Erklärung:** ...
-
-* Keine Gedankenstriche oder Halbsätze.
-* **Alle Aussagen** enden mit Punkt, **alle Fragen** mit Fragezeichen.
-* Stichpunkte ohne Satzschlusszeichen.
-* Schlagwörter nur in Frage und Erklärung fett.
-* Fortlaufende Nummerierung (1, 2, 3 …).
-
----
-
-#### **6 Ton & Stil**
-
-* Klar, präzise, neutral.
-* Fehlerfreies Deutsch.
-* Vermeide Umgangssprache und Mehrdeutigkeiten.
-
----
-
-#### **7 Didaktische Hinweise**
-
-* Decke unterschiedliche Aspekte des Textes ab.
-* Distraktoren basieren auf typischen Missverständnissen.
-* Erklärungen kurz, aber aussagekräftig.
-`;
+const DEFAULT_SINGLE_CHOICE_PROMPT = defaultSingleChoicePrompt;
 
 const defaultPrompts: Prompts = {
   combined: DEFAULT_COMBINED_PROMPT.trim(),
   singleChoice: DEFAULT_SINGLE_CHOICE_PROMPT.trim(),
+  multiSingleChoice: defaultMultiSingleChoicePrompt.trim(),
+  custom: builtinCustomPrompts.map((p) => ({ ...p })),
 };
 
 interface PromptsContextType {
@@ -146,10 +90,30 @@ export const PromptsProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (savedPrompts) {
         const parsed = JSON.parse(savedPrompts);
         if (parsed && typeof parsed === 'object') {
-          return {
-            combined: parsed.combined ?? defaultPrompts.combined,
-            singleChoice: parsed.singleChoice ?? defaultPrompts.singleChoice,
-          } as Prompts;
+            const sanitize = (entries: any[]): PromptDefinition[] => {
+              if (!Array.isArray(entries)) return [];
+              return entries
+                .filter((entry): entry is PromptDefinition =>
+                  entry && typeof entry.id === 'string' && typeof entry.title === 'string' && typeof entry.content === 'string'
+                )
+                .map((entry) => ({ ...entry }));
+            };
+
+            const savedCustom = sanitize(parsed.custom ?? []);
+            const mergedMap = new Map<string, PromptDefinition>();
+            builtinCustomPrompts.forEach((prompt) => {
+              mergedMap.set(prompt.id, { ...prompt });
+            });
+            savedCustom.forEach((prompt) => {
+              mergedMap.set(prompt.id, { ...mergedMap.get(prompt.id), ...prompt } as PromptDefinition);
+            });
+
+            return {
+              combined: parsed.combined ?? defaultPrompts.combined,
+              singleChoice: parsed.singleChoice ?? defaultPrompts.singleChoice,
+              multiSingleChoice: parsed.multiSingleChoice ?? defaultPrompts.multiSingleChoice,
+              custom: Array.from(mergedMap.values()),
+            } as Prompts;
         }
       }
     } catch (error) {

@@ -3,6 +3,7 @@ import { sendChat, ChatMessage } from '../services/openrouterChat';
 import { useModel } from '../contexts/ModelContext';
 import { useDebug } from '../contexts/DebugContext';
 import { usePrompts } from '../contexts/PromptsContext';
+import { PromptDefinition } from '../types';
 
 interface AIChatPanelProps {
   isOpen: boolean;
@@ -23,20 +24,29 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
-  const [selectedPrompt, setSelectedPrompt] = useState<'none' | 'review' | 'single'>('none');
+  const [selectedPromptId, setSelectedPromptId] = useState<string>('none');
   const [includeTE, setIncludeTE] = useState<boolean>(true);
   const [includeCTX, setIncludeCTX] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
+
+  const resolvePromptContent = useCallback((id: string, allPrompts: ReturnType<typeof usePrompts>['prompts']): string | null => {
+    if (id === 'review') return allPrompts.combined;
+    if (id === 'single') return allPrompts.singleChoice;
+    const entry = allPrompts.custom.find((p) => p.id === id);
+    return entry ? entry.content : null;
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
     const prelude: ChatMessage[] = [
       { role: 'system', content: 'Du bist ein hilfreicher KI-Editor. Du hilfst, den folgenden Markdown-Inhalt gezielt zu verbessern. Antworte präzise, liefere bei Bedarf direkt eine überarbeitete Fassung.' }
     ];
-    if (supportsPrompts && selectedPrompt !== 'none') {
-      const p = selectedPrompt === 'review' ? prompts.combined : prompts.singleChoice;
-      prelude.push({ role: 'system', content: p });
+    if (supportsPrompts && selectedPromptId !== 'none') {
+      const promptText = resolvePromptContent(selectedPromptId, prompts);
+      if (promptText) {
+        prelude.push({ role: 'system', content: promptText });
+      }
     }
     if (supportsPrompts && includeTE) {
       const te = localStorage.getItem('explanationMarkdown') || '';
@@ -50,7 +60,7 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
     setMessages(prelude);
     setInput('');
     setChatModel(model);
-  }, [isOpen, contextLabel, contextMarkdown, model, supportsPrompts, selectedPrompt, includeTE, includeCTX, prompts]);
+  }, [isOpen, contextLabel, contextMarkdown, model, supportsPrompts, selectedPromptId, includeTE, includeCTX, prompts]);
 
   useEffect(() => {
     // autoscroll
@@ -162,12 +172,15 @@ export const AIChatPanel: React.FC<AIChatPanelProps> = ({ isOpen, onClose, conte
                 <select
                   id="chat-prompt"
                   className="bg-gray-800 text-gray-200 px-2 py-1 rounded-md border border-gray-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
-                  value={selectedPrompt}
-                  onChange={(e) => setSelectedPrompt(e.target.value as any)}
+                  value={selectedPromptId}
+                  onChange={(e) => setSelectedPromptId(e.target.value)}
                 >
                   <option value="none">Keiner</option>
                   <option value="review">Review</option>
                   <option value="single">Single-Choice</option>
+                  {prompts.custom.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.title}</option>
+                  ))}
                 </select>
                 <label htmlFor="te-toggle" className="text-xs text-gray-400 ml-2">TE</label>
                 <input id="te-toggle" type="checkbox" className="accent-sky-500" checked={includeTE} onChange={(e) => setIncludeTE(e.target.checked)} />
